@@ -1,50 +1,70 @@
-import java.net.*;
 import java.io.*;
+import java.net.*;
 
 public class TCPClient {
-    public void start() throws IOException {
-        // Connessione della Socket con il Server
-        Socket socket = new Socket("localhost", 7777);
+    private Socket socket;
+    private BufferedReader is;
+    private DataOutputStream os;
+    private BufferedReader stdIn;
 
-        // Stream di byte da passare al Socket
-        DataOutputStream os = new DataOutputStream(socket.getOutputStream());
-        DataInputStream is = new DataInputStream(socket.getInputStream());
-        BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in));
-        
-        System.out.println("Benvenuto al gioco dei calci di rigore!");
-
-        // Ciclo per il gioco dei calci di rigore
-        while (true) {
-            // Ricevi il messaggio dal server
-            String serverMessage = is.readLine();
-            System.out.println(serverMessage);
-
-            // Input dell'utente per il calcio di rigore
-            System.out.print("Premi 'T' per tirare: ");
-            String userInput = stdIn.readLine();
-
-            // Invia la mossa al server
-            os.writeBytes(userInput + '\n');
-
-            // Ricevi il risultato dal server
-            String result = is.readLine();
-            System.out.println("Risultato: " + result);
-
-            // Verifica se il gioco è finito
-            if (result.equals("Vittoria!") || result.equals("Sconfitta!") || result.equals("Pareggio!")) {
-                System.out.println("Il gioco è terminato. Grazie per giocare!");
-                break;
-            }
+    public TCPClient(String serverAddress, int serverPort) {
+        try {
+            socket = new Socket(serverAddress, serverPort);
+            is = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            os = new DataOutputStream(socket.getOutputStream());
+            stdIn = new BufferedReader(new InputStreamReader(System.in));
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-
-        // Chiusura dello Stream e del Socket
-        os.close();
-        is.close();
-        socket.close();
     }
 
-    public static void main(String[] args) throws Exception {
-        TCPClient tcpClient = new TCPClient();
+    public void start() {
+        try {
+            System.out.println("Benvenuto al gioco dei calci di rigore!");
+
+            while (true) {
+                String serverMessage = is.readLine();
+                if (serverMessage == null || serverMessage.isEmpty()) {
+                    break;
+                }
+                System.out.println(serverMessage);
+
+                String userInput = stdIn.readLine();
+                if (userInput == null || userInput.isEmpty()) {
+                    break;
+                }
+                os.writeBytes(userInput + '\n');
+                os.flush();
+
+                String result = is.readLine();
+                if (result == null || result.isEmpty()) {
+                    break;
+                }
+                System.out.println("Risultato: " + result);
+
+                if (result.equals("Vittoria!") || result.equals("Sconfitta!") || result.equals("Pareggio!")) {
+                    System.out.println("Il gioco è terminato. Grazie per giocare!");
+                    break;
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                if (os != null) os.close();
+                if (is != null) is.close();
+                if (stdIn != null) stdIn.close();
+                if (socket != null) socket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        String serverAddress = "localhost";
+        int serverPort = 9999;
+        TCPClient tcpClient = new TCPClient(serverAddress, serverPort);
         tcpClient.start();
     }
 }
