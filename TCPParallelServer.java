@@ -1,15 +1,12 @@
 import java.io.*;
 import java.net.*;
 import java.util.Random;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 public class TCPParallelServer {
     private ServerSocket serverSocket;
     private boolean turnoClient1 = true;
-    private final Lock lock = new ReentrantLock();
-    private final Condition turno = lock.newCondition();
+    private int golClient1 = 0;
+    private int golClient2 = 0;
 
     public void start(int port) {
         try {
@@ -21,8 +18,10 @@ public class TCPParallelServer {
                 System.out.println("Client connesso: " + clientSocket);
 
                 // Creazione di un thread per gestire la connessione del client
-                Thread clientThread = new Thread(new ClientHandler(clientSocket));
+                Thread clientThread = new Thread(new ClientHandler(clientSocket, turnoClient1));
                 clientThread.start();
+
+                turnoClient1 = !turnoClient1; // Alternare il turno per il prossimo client
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -46,15 +45,9 @@ public class TCPParallelServer {
         private BufferedReader is;
         private boolean myTurn;
 
-        public ClientHandler(Socket clientSocket) {
+        public ClientHandler(Socket clientSocket, boolean turnoClient1) {
             this.clientSocket = clientSocket;
-            lock.lock();
-            try {
-                this.myTurn = turnoClient1;
-                turnoClient1 = !turnoClient1; // Alternare il turno
-            } finally {
-                lock.unlock();
-            }
+            this.myTurn = turnoClient1;
         }
 
         @Override
@@ -65,45 +58,34 @@ public class TCPParallelServer {
 
                 System.out.println("Il client si è connesso.");
 
+                int gol = 0;
+
                 while (true) {
-                    lock.lock();
-                    try {
-                        while (!myTurn) {
-                            turno.await();
-                        }
+                    String serverMessage = "Scegli la direzione del tiro (D = destra, S = sinistra, C = centro): ";
+                    os.writeBytes(serverMessage + '\n');
+                    os.flush();
 
-                        String serverMessage = "Scegli la direzione del tiro (D = destra, S = sinistra, C = centro): ";
-                        os.writeBytes(serverMessage + '\n');
-                        os.flush();
-
-                        String mossaUtente = is.readLine();
-                        if (mossaUtente == null || mossaUtente.isEmpty()) {
-                            break;
-                        }
-
-                        String[] mosse = {"D", "S", "C"};
-                        String mossaPortiere = mosse[new Random().nextInt(mosse.length)];
-
-                        String result;
-                        if (mossaUtente.equals(mossaPortiere)) {
-                            result = "Parato!";
-                        } else {
-                            result = "Gol!";
-                        }
-
-                        os.writeBytes(result + '\n');
-                        os.flush();
-
-                        myTurn = false; // Il turno del cliente è finito
-                        turno.signalAll(); // Notifica all'altro client che è il suo turno
-
-                        // Ora attendi il tuo turno
-                        this.myTurn = false;
-                    } finally {
-                        lock.unlock();
+                    String mossaUtente = is.readLine();
+                    if (mossaUtente == null || mossaUtente.isEmpty()) {
+                        break;
                     }
+
+                    String[] mosse = {"D", "S", "C"};
+                    String mossaPortiere = mosse[new Random().nextInt(mosse.length)];
+
+                    String result;
+                    if (mossaUtente.equals(mossaPortiere)) {
+                        result = "Parato!";
+                    } else {
+                        result = "Gol!";
+                        gol++;
+                    }
+
+                    os.writeBytes(result + '\n');
+                    os.writeBytes("Gol totali: " + gol + '\n'); // Invia il conteggio dei gol
+                    os.flush();
                 }
-            } catch (IOException | InterruptedException e) {
+            } catch (IOException e) {
                 e.printStackTrace();
             } finally {
                 try {
