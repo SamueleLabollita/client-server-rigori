@@ -4,25 +4,24 @@ import java.util.Random;
 
 public class TCPParallelServer {
     private ServerSocket serverSocket;
-    private boolean turnoClient1 = true;
-    private int golClient1 = 0;
-    private int golClient2 = 0;
+    private int connectedClients = 0;
 
     public void start(int port) {
         try {
             serverSocket = new ServerSocket(port);
             System.out.println("Server avviato. In attesa di connessioni...");
 
-            while (true) {
+            while (connectedClients < 2) {
                 Socket clientSocket = serverSocket.accept();
                 System.out.println("Client connesso: " + clientSocket);
 
                 // Creazione di un thread per gestire la connessione del client
-                Thread clientThread = new Thread(new ClientHandler(clientSocket, turnoClient1));
+                Thread clientThread = new Thread(new ClientHandler(clientSocket));
                 clientThread.start();
 
-                turnoClient1 = !turnoClient1; // Alternare il turno per il prossimo client
+                connectedClients++;
             }
+            System.out.println("Sono connessi 2 client. Inizia la partita.");
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
@@ -43,11 +42,9 @@ public class TCPParallelServer {
         private Socket clientSocket;
         private DataOutputStream os;
         private BufferedReader is;
-        private boolean myTurn;
 
-        public ClientHandler(Socket clientSocket, boolean turnoClient1) {
+        public ClientHandler(Socket clientSocket) {
             this.clientSocket = clientSocket;
-            this.myTurn = turnoClient1;
         }
 
         @Override
@@ -68,6 +65,13 @@ public class TCPParallelServer {
                     String mossaUtente = is.readLine();
                     if (mossaUtente == null || mossaUtente.isEmpty()) {
                         break;
+                    }
+
+                    // Controlla se l'input dell'utente è valido
+                    if (!isValidInput(mossaUtente)) {
+                        os.writeBytes("Input non valido. Utilizza solo D, S o C per indicare la direzione del tiro.\n");
+                        os.flush();
+                        continue; // Continua con il prossimo ciclo
                     }
 
                     String[] mosse = {"D", "S", "C"};
@@ -96,6 +100,11 @@ public class TCPParallelServer {
                     e.printStackTrace();
                 }
             }
+        }
+
+        // Metodo per controllare se l'input dell'utente è valido
+        private boolean isValidInput(String input) {
+            return input != null && !input.isEmpty() && (input.equals("D") || input.equals("S") || input.equals("C"));
         }
     }
 }
