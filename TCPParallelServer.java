@@ -1,10 +1,14 @@
 import java.io.*;
 import java.net.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 public class TCPParallelServer {
     private ServerSocket serverSocket;
+    private List<ClientHandler> clientHandlers = new ArrayList<>();
     private int connectedClients = 0;
+    private int[] goals = new int[2]; // Array per memorizzare i gol dei due client
 
     public void start(int port) {
         try {
@@ -15,8 +19,12 @@ public class TCPParallelServer {
                 Socket clientSocket = serverSocket.accept();
                 System.out.println("Client connesso: " + clientSocket);
 
+                // Aggiungi il clientHandler alla lista
+                ClientHandler clientHandler = new ClientHandler(clientSocket);
+                clientHandlers.add(clientHandler);
+
                 // Creazione di un thread per gestire la connessione del client
-                Thread clientThread = new Thread(new ClientHandler(clientSocket));
+                Thread clientThread = new Thread(clientHandler);
                 clientThread.start();
 
                 connectedClients++;
@@ -24,12 +32,6 @@ public class TCPParallelServer {
             System.out.println("Sono connessi 2 client. Inizia la partita.");
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                if (serverSocket != null) serverSocket.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
     }
 
@@ -42,6 +44,7 @@ public class TCPParallelServer {
         private Socket clientSocket;
         private DataOutputStream os;
         private BufferedReader is;
+        private int clientId;
 
         public ClientHandler(Socket clientSocket) {
             this.clientSocket = clientSocket;
@@ -55,9 +58,12 @@ public class TCPParallelServer {
 
                 System.out.println("Il client si è connesso.");
 
-                int gol = 0;
+                // Assegna un ID al client
+                clientId = connectedClients - 1;
 
-                while (true) {
+                int gol = 0;
+                int tiri = 0;
+                while (tiri < 5) {
                     String serverMessage = "Scegli la direzione del tiro (D = destra, S = sinistra, C = centro): ";
                     os.writeBytes(serverMessage + '\n');
                     os.flush();
@@ -74,6 +80,8 @@ public class TCPParallelServer {
                         continue; // Continua con il prossimo ciclo
                     }
 
+                    tiri++;
+
                     String[] mosse = {"D", "S", "C"};
                     String mossaPortiere = mosse[new Random().nextInt(mosse.length)];
 
@@ -89,22 +97,36 @@ public class TCPParallelServer {
                     os.writeBytes("Gol totali: " + gol + '\n'); // Invia il conteggio dei gol
                     os.flush();
                 }
+
+                // Aggiorna i gol del client
+                goals[clientId] = gol;
+
+                // Se entrambi i client hanno completato i loro tiri, confronta i punteggi
+                if (clientId == 1) {
+                    compareScores();
+                }
             } catch (IOException e) {
                 e.printStackTrace();
-            } finally {
-                try {
-                    if (os != null) os.close();
-                    if (is != null) is.close();
-                    if (clientSocket != null) clientSocket.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
             }
         }
 
         // Metodo per controllare se l'input dell'utente è valido
         private boolean isValidInput(String input) {
             return input != null && !input.isEmpty() && (input.equals("D") || input.equals("S") || input.equals("C"));
+        }
+    }
+
+    // Metodo per confrontare i punteggi dei due client
+    private void compareScores() {
+        int score1 = goals[0];
+        int score2 = goals[1];
+
+        if (score1 > score2) {
+            System.out.println("Il client 1 ha vinto con " + score1 + " gol!");
+        } else if (score1 < score2) {
+            System.out.println("Il client 2 ha vinto con " + score2 + " gol!");
+        } else {
+            System.out.println("La partita è finita in pareggio con " + score1 + " gol ciascuno!");
         }
     }
 }
